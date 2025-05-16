@@ -1,0 +1,11 @@
+[project]
+name = "TreeMaker"
+version = "0.1.0"
+description = "manipulate, make projects tree from a txt file"
+
+[options]
+debug = true
+default_tree_file = "tests/test_tree.txt"
+
+[structure]
+modules = ["args", "errors", "lexer", "parser", "treeMaker", "builder", "fs", "utils"]
