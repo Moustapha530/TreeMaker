@@ -10,7 +10,7 @@ int parse_args(Args *args){
         }
         else if(!strcmp(__argv[i], "--debug") || !strcmp(__argv[i], "-d"))
             args->debug_mode = 1;
-        else if((!strcmp(__argv[i], "--tree") || !strcmp(__argv[i], "-d")) && i+1 < __argc)
+        else if((!strcmp(__argv[i], "--tree") || !strcmp(__argv[i], "-t")) && i+1 < __argc)
             args->input_file = __argv[i+1];
         else {
             fprint(stderr, "Unknown argument %s\n", __argv[i]);
