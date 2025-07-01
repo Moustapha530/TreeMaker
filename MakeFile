@@ -10,7 +10,7 @@ SRC  = $(wildcard $(SRC_DIR)/*.c)
 all: $(EXEC)
 
 exec: $(EXEC)
-	bin/$(EXEC) tests/tree_test.txt
+	$(EXEC) tests/tree_test.txt
 
 $(EXEC): $(OBJ)
 	$(CC) $(CFLAGS) -o $(EXEC) $(SRC)
