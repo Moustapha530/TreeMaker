@@ -1,16 +1,32 @@
 #ifndef __ARGS_H__
-#define __ARGS_H__
+    #define __ARGS_H__
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <string.h>
+    #include <stdbool.h>
 
-typedef struct {
-    const char *input_file;
-    _Bool debug_mode;
-} Args;
+    #ifdef _WIN32
+        #include <direct.h>
+    #else
+        #include <unistd.h>
+    #endif
 
-int parse_args(Args *args);
-int print_help();
+    #ifndef PATH_MAX
+        #define PATH_MAX 4096
+    #endif
+
+    typedef struct {
+        char **input_files;
+        unsigned int file_count;
+        char *dest_path;
+        bool debug_mode;
+    } Args;
+
+    void init_args(Args *args);
+    void add_input_file(Args *args, const char *filename);
+    void free_args(Args *args);
+    void parse_args(int argc, char **argv, Args *args);
+    void print_help();
 
 #endif
