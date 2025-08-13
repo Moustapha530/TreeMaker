@@ -17,37 +17,37 @@
     #define PATH_SEPARATOR '/'
 #endif
 
-int create_folder(const char *path) {
+int create_folder(const char *path){
     #ifdef _WIN32
-        if (_mkdir(path) == 0 || errno == EEXIST) {
+        if(_mkdir(path) == 0 || errno == EEXIST){
             return 0;
         } else {
-            perror("mkdir (Windows)");
+            perror("mkdir(Windows)");
             return -1;
         }
     #else
-        if (mkdir(path, 0755) == 0 || errno == EEXIST) {
+        if(mkdir(path, 0755) == 0 || errno == EEXIST){
             return 0;
         } else {
-            perror("mkdir (Unix)");
+            perror("mkdir(Unix)");
             return -1;
         }
     #endif
 }
 
-int create_file(const char *path) {
+int create_file(const char *path){
     #ifdef _WIN32
         FILE *f = fopen(path, "w");
-        if (f == NULL) {
-            perror("fopen (Windows)");
+        if(f == NULL){
+            perror("fopen(Windows)");
             return -1;
         }
         fclose(f);
         return 0;
     #else
         int fd = open(path, O_CREAT | O_WRONLY, 0644);
-        if (fd < 0) {
-            perror("open (Unix)");
+        if(fd < 0){
+            perror("open(Unix)");
             return -1;
         }
         close(fd);
