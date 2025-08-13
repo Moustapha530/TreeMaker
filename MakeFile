@@ -7,7 +7,8 @@ INCLUDES = includes
 SRC_DIR = src
 SRC  = $(wildcard $(SRC_DIR)/*.c)
 
-all: $(EXEC)
+all: 
+	$(CC) $(CFLAGS) -o $(EXEC) $(SRC)
 
 exec: $(EXEC)
 	$(EXEC) tests/tree_test.txt
