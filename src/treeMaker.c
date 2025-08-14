@@ -12,12 +12,17 @@ Tree new_tree(const char *path){
         return NULL;
     }
 
-    tree->is_directory = (path[strlen(path) - 1] == '/'); 
+    bool is_dir = false;
+    size_t len = strlen(path);
 
-    tree->path = strdup(path);
-    if(tree->is_directory)
-        tree->path[strlen(tree->path) - 1] = '\0';
+    if(path[len - 1] == '/'){
+        is_dir = true;
+        tree->path = _strndup(path, len - 1);
+    } else {
+        tree->path = strdup(path);
+    }
 
+    tree->is_directory = is_dir; 
     tree->child_count = 0;    
     tree->children = NULL;
     tree->parent = NULL;
