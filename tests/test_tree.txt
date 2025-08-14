@@ -1,6 +1,6 @@
-Project
-    src
+Project/
+    src/
         main.cpp
-    includes
+    includes/
         main.hpp
     MakeFile.txt
