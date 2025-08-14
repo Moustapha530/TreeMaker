@@ -1,56 +1,61 @@
 #include "treeMaker.h"
 
-Tree new_tree(const char *path, const bool is_directory){
+Tree new_tree(const char *path){
     Tree tree = malloc(sizeof(TreeNode));
     if(tree == NULL){
-        fprintf(stderr, "fatal : new_tree name %s allocation failed\n", path);
-        exit(EXIT_FAILURE);
+        fprintf(stderr, "fatal (tree making): new_tree name %s allocation failed\n", path);
+        return NULL;
     }
 
-    tree->is_directory = is_directory;
+    if(path == NULL || strlen(path) == 0){
+        fprintf(stderr, "fatal (tree making): invalid name ");
+        return NULL;
+    }
+
+    tree->is_directory = (path[strlen(path) - 1] == '/'); 
+
     tree->path = strdup(path);
+    if(tree->is_directory)
+        tree->path[strlen(tree->path) - 1] = '\0';
+
     tree->child_count = 0;    
     tree->children = NULL;
+    tree->parent = NULL;
 
     return tree;
 }
 
-Tree add_child(Tree parent, const char *path){
-    Tree tree = new_tree(path, true);
-
-    parent->children = realloc(parent->children,(parent->child_count + 1) * sizeof(Tree));
-    if(parent->children == NULL){
-        fprintf(stderr, "fatal : allocation for tree %s failed\n", path);
-        exit(EXIT_FAILURE);
+Tree attach_child(Tree parent, const char *name){
+    if(is_empty_tree(parent)){
+        fprintf(stderr, "fatal (attach node) : parent is NULL, creating standalone root for \"%s\"\n", name);
+        return new_tree(name);
     }
-    
-    parent->children[parent->child_count++] = tree;    
-    return parent;
-}
 
-Tree add_file_child(Tree parent, const char *path){
-    Tree tree = new_tree(path, false);
-    
-    parent->children = realloc(parent->children,(parent->child_count + 1) * sizeof(Tree));
-    if(parent->children == NULL){
-        fprintf(stderr, "fatal : allocation for tree %s failed\n", path);
-        exit(EXIT_FAILURE);
+    Tree node = new_tree(name);
+    node->parent = parent;
+
+    Tree *new_children = realloc(parent->children, (parent->child_count + 1) * sizeof(Tree));
+    if(new_children == NULL){
+        fprintf(stderr, "fatal (memory) : memory allocation failed for \"%s\"\n", name);
+        clean_tree(&node);
+        return NULL;
     }
-        
-    parent->children[parent->child_count++] = tree;
-    return parent;
+
+    parent->children = new_children;
+    parent->children[parent->child_count++] = node;
+    return node;
 }
 
 bool is_empty_tree(Tree tree){
     return tree == NULL;
 }
 
-void print_tree(Tree tree, int level) {
+void print_tree(Tree tree, int level){
     if(is_empty_tree(tree))
         return;
 
     for(int i = 0; i < level; i++)
-        printf("\t"); 
+        printf("    "); 
     
     printf("%s%s\n", tree->path,(tree->is_directory) ? "/" : "");    
 
@@ -59,13 +64,13 @@ void print_tree(Tree tree, int level) {
         
 }
 
-void clean_tree(Tree *tree) {
+void clean_tree(Tree *tree){
     if(is_empty_tree(*tree)) 
         return;
 
-    if((*tree)->children != NULL) {
-        for(size_t i = 0; i < (*tree)->child_count; ++i) {
-            if((*tree)->children[i] != NULL) {
+    if((*tree)->children != NULL){
+        for(size_t i = 0; i <(*tree)->child_count; ++i){
+            if((*tree)->children[i] != NULL){
                 clean_tree(&(*tree)->children[i]);
                 (*tree)->children[i] = NULL; 
             }
