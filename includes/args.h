@@ -23,10 +23,10 @@
         bool debug_mode;
     } Args;
 
-    void init_args(Args *args);
-    void add_input_file(Args *args, const char *filename);
+    int init_args(Args *args);
+    int add_input_file(Args *args, const char *filename);
     void free_args(Args *args);
-    void parse_args(int argc, char **argv, Args *args);
+    int parse_args(int argc, char **argv, Args *args);
     void print_help();
 
 #endif
