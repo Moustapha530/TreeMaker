@@ -6,6 +6,7 @@
     #include <stdio.h>
     #include <string.h>
     #include "utils.h"
+    #include "fs.h"
 
     typedef struct TreeNode {
         char *path;

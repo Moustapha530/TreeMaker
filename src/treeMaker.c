@@ -32,16 +32,22 @@ Tree new_tree(const char *path){
 
 Tree attach_child(Tree parent, const char *name){
     if(is_empty_tree(parent)){
-        fprintf(stderr, "fatal (attach node) : parent is NULL, creating standalone root for \"%s\"\n", name);
+        fprintf(stderr, "warning (attach node) : parent is NULL, creating standalone root for \"%s\".\n", name);
         return new_tree(name);
     }
 
     Tree node = new_tree(name);
     node->parent = parent;
+    node->path = realloc(node->path, PATH_MAX);
+    if(node->path == NULL){
+        fprintf(stderr, "fatal (memory): memory allocation failed for \"%s\".\n", name);
+        return NULL;
+    }
+    snprintf(node->path, PATH_MAX, "%s%c%s", node->parent->path, PATH_SEPARATOR, name);
 
     Tree *new_children = realloc(parent->children, (parent->child_count + 1) * sizeof(Tree));
     if(new_children == NULL){
-        fprintf(stderr, "fatal (memory) : memory allocation failed for \"%s\"\n", name);
+        fprintf(stderr, "fatal (memory) : memory allocation failed for \"%s\".\n", name);
         clean_tree(&node);
         return NULL;
     }
