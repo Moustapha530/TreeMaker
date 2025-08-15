@@ -3,18 +3,21 @@
 */ 
 #include "args.h"
 #include "parser.h"
+#include "builder.h"
 
 int main(int argc, char **argv){
     Args args;
-    parse_args(argc, argv, &args);
+    if(parse_args(argc, argv, &args) != 0)
+        return EXIT_FAILURE;
 
     for(size_t i = 0; i < args.file_count; i++){
         Tree tr = parse_file(args.input_files[i]);
         if(!tr){
             fprintf(stderr, "fatal : parsing error please check the input file \"%s\".\n", args.input_files[i]);
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         } else {
-            print_tree(tr, 0);
+            if(build_tree(tr, args.dest_path) != 0)
+                return EXIT_FAILURE;
             clean_tree(&tr);
         }
     }
