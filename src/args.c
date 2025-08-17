@@ -91,9 +91,9 @@ int parse_args(int argc, char **argv, Args *args){
 
 void print_help(){
     // Print a short help message
-    printf("Create tree templates from tree file.\n\n",
-    "treemaker [options] [input_file]\n\n",
+    printf("Create tree templates from tree file.\n\n"
+    "treemaker [options] [input_file]\n\n"
     "--debug, -d\tActivate the debug mode.\n"
-    "--tree, -t\tThe input file to create the project tree.\n",
+    "--tree, -t\tThe input file to create the project tree.\n"
     "--path, -p\tThe destination path to create the project tree.\n\n");
 }
