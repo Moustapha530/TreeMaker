@@ -131,7 +131,7 @@
     // ---------------- API ----------------
     void lexer_init(Lexer* L, const char* src, size_t len, const LexerConfig* cfg);
     void lexer_free(Lexer* L);
-    int lexer_run_file(const char* filename, const LexerConfig* cfg);
+    size_t lexer_tokenize_file(const char* filename, Token **out_tokens, const LexerConfig* cfg);
 
     // Return next token. If a fatal error occurred and stop_on_first_error is true,
     // returns T_EOF immediately.

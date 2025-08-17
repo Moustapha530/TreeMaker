@@ -51,7 +51,7 @@ void lex_error_print(const LexError* e, const char* filename){
         return;
         
     const char* file = filename ? filename : "<stdin>";
-    fprintf(stderr, "\n\n%s:%d:%d: error: %s%s%s(%s)\n",
+    fprintf(stderr, "\n\n%s:%d:%d: error: %s%s%s(%s)\n\n",
             file, e->line, e->column,
             e->message ? e->message : "",
             e->message ? " " : "",
@@ -159,17 +159,6 @@ static void add_error(Lexer* L, LexErrorKind kind, int line, int col, const char
         L->had_fatal = true;
 }
 
-static void skip_inline_ws(Lexer* L){
-    while(!__eof(L)){
-        char c = peek(L);
-
-        if(c == ' ' || c == '\t' || c == '\r')
-            getc_(L);
-        else 
-            break;
-    }
-}
-
 static int count_indent(const char* s, size_t n, size_t* adv, int tabw){
     int spaces = 0; size_t i = 0;
     while(i < n){
@@ -229,7 +218,7 @@ static void emit_indent_dedent(Lexer* L, int new_indent){
 }
 
 static bool is_name_char(unsigned char c){
-    return isalnum(c) || c == '_' || c == '-' || c == '.' || c == '+' || c == '@';
+    return isalnum(c) || c == '_' || c == '-' || c == '.' || c == '+' || c == '@' || c == '@';
 }
 
 static Token lex_name_or_dir(Lexer* L){
@@ -238,7 +227,7 @@ static Token lex_name_or_dir(Lexer* L){
     size_t n = 0;
 
     while(!__eof(L)){
-        unsigned char c =(unsigned char)peek(L);
+        unsigned char c = (unsigned char)peek(L);
         if(is_name_char(c)){
             getc_(L); 
             n++;
@@ -249,12 +238,8 @@ static Token lex_name_or_dir(Lexer* L){
 
     // Optional direct '/' marking a directory
     if(!__eof(L) && peek(L) == '/'){
-        // part of the same token but we keep only the name in lexeme
         getc_(L);
-        // We do not emit a separate DIR token; the parser can treat a NAME
-        // token that was immediately followed by '/' as a directory. We 
-        // expose that by placing a trailing slash into the raw source, but
-        // we keep lexeme without '/'.
+        n++;
         return make_tok(T_NAME, start, n, line, col);
     }
     return make_tok(T_NAME, start, n, line, col);
@@ -299,7 +284,7 @@ void lexer_free(Lexer* L){
 
 static Token next_core(Lexer* L){
     Token out;
-    if(q_pop(&L->qh, &L->qt, &out)) 
+    if(q_pop(&L->qh, &L->qt, &out))
         return out;
 
     if(__eof(L)){
@@ -310,65 +295,63 @@ static Token next_core(Lexer* L){
         return make_tok(T_EOF, NULL, 0, L->line, L->col);
     }
 
-    // Start-of-line indentation management
+    // ----- Start-of-line indentation management -----
     if(L->at_line_start){
-        size_t adv = 0; int spaces = count_indent(L->src + L->i, L->len - L->i, &adv, L->cfg.tab_width);
-        // Detect if line is blank or comment-only
-        size_t k = L->i + adv; bool only_ws = true; bool comment_only = false;
-        while(k < L->len){
-            char c = L->src[k];
-            if(c == '\r'){ 
-                k++; 
-                continue; 
-            }
-            if(c == '\n') 
-                break;
-            if(c == '#'){ 
-                comment_only = true; 
-                break; 
-            }
-            if(c == ' ' || c == '\t'){ 
-                k++; 
-                continue; 
-            }
-            only_ws = false; break;
-        }
-        emit_indent_dedent(L, spaces);
-        if(q_pop(&L->qh, &L->qt, &out)) 
-            return out;
-        // consume indentation now
-        for(size_t j = 0; j < adv; ++j) 
-            getc_(L);
+        size_t adv = 0;
+        int spaces = count_indent(L->src + L->i, L->len - L->i, &adv, L->cfg.tab_width);
 
+        const char *p = L->src + L->i + adv;
+        char c = (p < (L->src + L->len)) ? *p : '\0';
+
+        if(c == '\n' || c == '\0'){
+            L->i += adv;
+            if(c == '\n') (void)getc_(L);
+            return next_core(L);
+        }
+
+        if(c == '#'){
+            L->i += adv;
+            while(!__eof(L) && getc_(L) != '\n') {}
+            return next_core(L);
+        }
+
+        L->i += adv;
+        L->col += (int)adv;
         L->at_line_start = false;
-        if((only_ws || comment_only) && L->cfg.emit_blank_newlines){
-            // eat to end-of-line and emit NEWLINE; comment itself will be lexed below if present
-            if(!__eof(L) && L->src[L->i] == '\n'){
-                getc_(L); // consume '\n'
-                return make_tok(T_NEWLINE, NULL, 0, L->line - 1, 1);
-            }
-        }
+
+        emit_indent_dedent(L, spaces);
+        if(q_pop(&L->qh, &L->qt, &out))
+            return out;
     }
 
-    // Inline whitespace
-    skip_inline_ws(L);
-
-    // Newline
-    if(!__eof(L) && peek(L) == '\n'){
-        getc_(L);
-        return make_tok(T_NEWLINE, NULL, 0, L->line - 1, 1);
+    while(!__eof(L)){
+        char c = peek(L);
+        if(c == ' ' || c == '\t' || c == '\r'){
+            (void)getc_(L);
+            continue;
+        }
+        if(c == '#'){
+            while(!__eof(L) && getc_(L) != '\n') {}
+            return next_core(L);
+        }
+        break;
     }
 
-    // Comment
-    if(!__eof(L) && peek(L) == '#'){
-        int line = L->line, col = L->col; getc_(L);
-        const char* start = &L->src[L->i]; size_t n = 0;
-
-        while(!__eof(L) && peek(L) != '\n'){
-            getc_(L); 
-            n++; 
+    if(__eof(L)){
+        if(stack_top(&L->indents) > 0){
+            stack_pop(&L->indents);
+            return make_tok(T_DEDENT, NULL, 0, L->line, L->col);
         }
-        return make_tok(T_COMMENT, start, n, line, col);
+        return make_tok(T_EOF, NULL, 0, L->line, L->col);
+    }
+
+    if(peek(L) == '\n'){
+        (void)getc_(L);
+        if(L->cfg.emit_blank_newlines){
+            return make_tok(T_NEWLINE, NULL, 0, L->line - 1, 1);
+        }else{
+            return next_core(L);
+        }
     }
 
     // NAME
@@ -423,63 +406,74 @@ const LexError* lexer_errors(const Lexer* L){
     return L ? L->errors : NULL; 
 }
 
-int lexer_run_file(const char* filename, const LexerConfig* cfg){
-    if(!filename){
-        fprintf(stderr, "error: no filename provided\n");
-        return EXIT_FAILURE;
+size_t lexer_tokenize_file(const char *filename, Token **out_tokens, const LexerConfig *cfg){
+    *out_tokens = NULL;
+
+    FILE *fp = fopen(filename, "rb");
+    if(!fp){
+        fprintf(stderr, "fatal (tokenizing): cannot open '%s'.\n", filename);
+        return 0;
+    }
+    fseek(fp, 0, SEEK_END);
+    long n = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    if(n < 0){ 
+        fclose(fp); 
+        return 0; 
     }
 
-    FILE* f = fopen(filename, "rb");
-    if(!f){
-        fprintf(stderr, "error: cannot open file '%s'\n", filename);
-        return EXIT_FAILURE;
+    char *buf = (char*)malloc((size_t)n + 1);
+    if(!buf){ 
+        fclose(fp); 
+        fprintf(stderr, "fatal (tokenizing): alocation failed for the file bufeer.\n"); 
+        return 0; 
     }
 
-    struct stat st;
-    if(fstat(fileno(f), &st) != 0){
-        fprintf(stderr, "error: cannot stat file '%s'\n", filename);
-        fclose(f);
-        return EXIT_FAILURE;
+    size_t rd = fread(buf, 1, (size_t)n, fp);
+    fclose(fp);
+    buf[rd] = '\0';
+
+    LexerConfig local = cfg ? *cfg : (LexerConfig){ .tab_width = 4, .emit_blank_newlines = false, .stop_on_first_error = true };
+    Lexer L; 
+    lexer_init(&L, buf, rd, &local);
+
+    size_t cap = 64, count = 0;
+    Token *arr = (Token*)malloc(cap * sizeof(Token));
+    if(!arr){ 
+        free(buf); 
+        fprintf(stderr, "fatal (tokenizing): allocation failed for tokens array.\n"); 
+        return 0; 
     }
-    size_t size = (size_t)st.st_size;
-
-    char* buf = (char*)malloc(size + 1);
-    if(!buf){
-        fprintf(stderr, "error: out of memory while reading '%s'\n", filename);
-        fclose(f);
-        return EXIT_FAILURE;
-    }
-
-    size_t rd = fread(buf, 1, size, f);
-    fclose(f);
-
-    if(rd != size){
-        fprintf(stderr, "error: failed to read file '%s'\n", filename);
-        free(buf);
-        return EXIT_FAILURE;
-    }
-    buf[size] = '\0'; 
-
-    LexerConfig local_cfg;
-    local_cfg = *cfg;
-
-    Lexer L;
-    lexer_init(&L, buf, size, &local_cfg);
 
     for(;;){
-        Token t = lexer_next(&L);
-        token_free(&t);
-        if(t.type == T_EOF) break;
-    }
+        Token t = next_core(&L);
+        if(t.type == T_NAME || t.type == T_INDENT || t.type == T_DEDENT || t.type == T_EOF){
+            if(count == cap){
+                cap *= 2;
+                Token *tmp = (Token*)realloc(arr, cap * sizeof(Token));
+                if(!tmp){
+                    fprintf(stderr, "fatal: OOM growing token array\n");
+                    for(size_t i=0; i < count; ++i) 
+                        token_free(&arr[i]);
 
-    size_t nerr = lexer_error_count(&L);
-    const LexError* errs = lexer_errors(&L);
-    for(size_t i = 0; i < nerr; ++i){
-        lex_error_print(&errs[i], filename);
+                    free(arr); 
+                    free(buf); 
+                    lexer_free(&L);
+                    return 0;
+                }
+                arr = tmp;
+            }
+            arr[count++] = t;
+        }else{
+            token_free(&t);
+        }
+
+        if(t.type == T_EOF) 
+            break;
     }
 
     lexer_free(&L);
     free(buf);
-
-    return (nerr > 0)? EXIT_FAILURE : EXIT_SUCCESS;
+    *out_tokens = arr;
+    return count;
 }

@@ -25,20 +25,15 @@
 #include "args.h"
 #include "parser.h"
 #include "builder.h"
-#include "lexer.h"
 
 int main(int argc, char **argv){
     Args args;
-    LexerConfig lex_config = {4, true, false};          // Configuration for the lexer: tab width 4, emit blank newlines, don't stop on first error
 
     if(parse_args(argc, argv, &args) != 0)              // Parse command-line arguments. If parsing fails, exit.
         return EXIT_FAILURE;
 
     for(size_t i = 0; i < args.file_count; i++){       // Iterate through each input file provided.
-        if(lexer_run_file(args.input_files[i], &lex_config) != 0) // Run the lexer on the input file. If lexing fails, exit.
-            return EXIT_FAILURE;
-
-        Tree tr = parse_file(args.input_files[i]);      // Parse the input file to create the tree structure.
+        Tree tr = parse_tokens(args.input_files[i]);      // Parse the input file to create the tree structure.
         if(!tr){                                        // If parsing fails (returns NULL), print an error and exit.
             fprintf(stderr, "fatal : parsing error please check the input file \"%s\".\n", args.input_files[i]);
             return EXIT_FAILURE;

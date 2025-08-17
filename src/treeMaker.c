@@ -5,13 +5,13 @@ Tree new_tree(const char *path){
     Tree tree = malloc(sizeof(TreeNode));
     if(tree == NULL){                   /* Check if allocation failed */
         // Print the error
-        fprintf(stderr, "fatal (tree making): new_tree name %s allocation failed\n", path);
+        fprintf(stderr, "fatal (parsing): new_tree name %s allocation failed\n", path);
         return NULL;                    /* Exit and return null */
     }
 
     // Check if the path is given
     if(path == NULL || strlen(path) == 0){
-        fprintf(stderr, "fatal (tree making): invalid name ");      /* Print the error */
+        fprintf(stderr, "fatal (parsing): invalid name.\n");      /* Print the error */
         return NULL;                                                /* Exit and return null */
     }
 
@@ -22,7 +22,8 @@ Tree new_tree(const char *path){
     if(path[len - 1] == '/'){
         is_dir = true;                                              /* Pass is dir to true */
         // Remove trailing slash for the stored path string
-        tree->path = _strndup(path, len - 1);
+        tree->path = _strndup(path, len);
+        tree->path[strlen(tree->path) - 1] = '\0';
     } else {
         tree->path = strdup(path);                                  /* Reallocate the tree path */
     }
@@ -38,11 +39,10 @@ Tree new_tree(const char *path){
 
 Tree attach_child(Tree parent, const char *name){
     // Check if the parent is empty
-    if(is_empty_tree(parent)){
+    if(is_empty_tree(parent))
         // Print the error
-        fprintf(stderr, "warning (attach node) : parent is NULL, creating standalone root for \"%s\".\n", name);
         return new_tree(name);
-    }
+    
 
     // Create a new node
     Tree node = new_tree(name);
@@ -54,7 +54,7 @@ Tree attach_child(Tree parent, const char *name){
     node->path = realloc(node->path, PATH_MAX);
     if(node->path == NULL){                         /* Check if allocation failed */
         // Print the error
-        fprintf(stderr, "fatal (memory): memory allocation failed for \"%s\".\n", name);
+        fprintf(stderr, "fatal (parsing): memory allocation failed for \"%s\".\n", name);
         return NULL;                                /* Exit and return null */
     }
     // Attach the parent and child path to node path
@@ -64,7 +64,7 @@ Tree attach_child(Tree parent, const char *name){
     Tree *new_children = realloc(parent->children, (parent->child_count + 1) * sizeof(Tree));
     if(new_children == NULL){                       /* Check if allocation failed */
         // Print the error
-        fprintf(stderr, "fatal (memory) : memory allocation failed for \"%s\".\n", name);
+        fprintf(stderr, "fatal (parsing) : memory allocation failed for \"%s\".\n", name);
         clean_tree(&node);                          /* Clean the tree */
         return NULL;                                /* Exit and return null */
     }

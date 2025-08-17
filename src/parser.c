@@ -1,156 +1,84 @@
 #include "parser.h"
 
-int count_indent(const char *line){
-    int level = 0;
-    int spaces = 0;
-    const char *p = line;
-
-    while(*p == ' ' || *p == '\t'){
-        if(*p == '\t'){
-            level += spaces / 4;
-            spaces = 0;
-            level += 1;
-        } else {
-            spaces += 1;
-            if(spaces == 4){
-                level += 1;
-                spaces = 0;
-            }
-        }
-        p++;
-    }
-
-    if(spaces > 0){
-        fprintf(stderr, "warning (count_indent) : leftover spaces (%d) ignored; use multiples of 4\n", spaces);
-    }
-
-    return level;
-}
-
-char *strip_whitespace(char *line){
-    while(*line == ' ' || *line == '\t' || *line == '-') 
-        line++;
-
-    char *end = line + strlen(line) - 1;
-    while(end > line &&(*end == '\n' || *end == '\r')) 
-        *end-- = '\0';
-    return line;
-}
-
-void strip_comment(char *line){
-    char *comment_pos = strchr(line, '#');
-    if(comment_pos){
-        *comment_pos = '\0';
-    }
-}
-
-Tree parse_file(const char *filename){
-    FILE *fp = fopen(filename, "r");
-    if(!fp){
-        fprintf(stderr, "fatal : failed to open file \"%s\", please check path\n", filename);
-        exit(EXIT_FAILURE);
-    }
+Tree parse_tokens(const char *path){
+    Token *toks = NULL;
+    // Configure the lexer
+    LexerConfig cfg = { .tab_width = 4, .emit_blank_newlines = false, .stop_on_first_error = false };
+    size_t ntok = lexer_tokenize_file(path, &toks, &cfg);       /* Tokenize the file */
 
     Tree tree = NULL;
-    char buffer[PATH_MAX];
 
     size_t stack_cap = 16;
-    Tree *stack = calloc(stack_cap, sizeof(Tree));
-    if(stack == NULL){
-        fprintf(stderr, "fatal (parse_file) : failed to allocate level stack\n");
-        fclose(fp);
+    Tree *stack = (Tree*)calloc(stack_cap, sizeof(Tree));
+    if(!stack){
+        fprintf(stderr, "fatal (parsing file): failed to allocate level stack\n\n");
+        for(size_t i=0; i<ntok; ++i) 
+            token_free(&toks[i]);
+            
+        free(toks);
         exit(EXIT_FAILURE);
     }
 
-    int prev_level = -1;
+    int level = 0;
+    stack[0] = NULL;
 
-    while(fgets(buffer, PATH_MAX, fp) != NULL){
-        strip_comment(buffer);
-        int level = count_indent(buffer);
-        char *clean_line = strip_whitespace(buffer);
+    for(size_t i=0; i<ntok; ++i){
+        Token *t = &toks[i];
 
-        if(clean_line[0] == '\0')
-            continue;
-
-        if((size_t)(level + 1) > stack_cap){
-            size_t new_cap = stack_cap;
-            while((size_t)(level + 1) > new_cap) new_cap *= 2;
-            Tree *tmp = realloc(stack, new_cap * sizeof(Tree));
-            if(tmp == NULL){
-                fprintf(stderr, "fatal (parse_file) : failed to grow level stack\n");
-                free(stack);
-                fclose(fp);
-                exit(EXIT_FAILURE);
+        if(t->type == T_INDENT){
+            level++;
+            if((size_t)(level) >= stack_cap){
+                size_t new_cap = stack_cap;
+                while((size_t)level >= new_cap) new_cap *= 2;
+                Tree *tmp = (Tree*)realloc(stack, new_cap * sizeof(Tree));
+                if(!tmp){
+                    fprintf(stderr, "fatal (parsing): failed to grow level stack\n\n");
+                    for(size_t k=0; k<ntok; ++k) 
+                        token_free(&toks[k]);
+                    free(toks); 
+                    free(stack);
+                    exit(EXIT_FAILURE);
+                }
+                for(size_t z = stack_cap; z < new_cap; ++z) tmp[z] = NULL;
+                stack = tmp; stack_cap = new_cap;
             }
-            memset(tmp + stack_cap, 0, (new_cap - stack_cap) * sizeof(Tree));
-            stack = tmp;
-            stack_cap = new_cap;
-        }
-
-        if(level > prev_level + 1 && prev_level >= 0){
-            fprintf(stderr, "warning (parse_file) : indentation jumped from %d to %d, normalizing to %d\n",
-                    prev_level, level, prev_level + 1);
-            level = prev_level + 1;
-        }
-
-        if(tree == NULL){
-            if(level != 0){
-                fprintf(stderr, "warning (parse_file) : first line has indent %d, treating as level 0\n", level);
-            }
-            tree = new_tree(clean_line);
-            stack[0] = tree;
-            prev_level = 0;
             continue;
         }
 
-        if(level == 0){
-            fprintf(stderr, "warning (parse_file) : extra level-0 entry \"%s\"; attaching as child of root\n", clean_line);
-            Tree node = attach_child(stack[0], clean_line);
-            if(node == NULL){
+        if(t->type == T_DEDENT){
+            if(level > 0) 
+                level--;
+
+            continue;
+        }
+
+        if(t->type == T_NAME){
+            const char *name = (t->lexeme)? t->lexeme : "";
+            Tree parent = (level > 0)? stack[level-1] : NULL;
+            Tree node = attach_child(parent, name);
+            if(is_empty_tree(node)) 
                 continue;
-            }
-            stack[1] = node;
-            for(int l = 2; l <= prev_level; ++l) stack[l] = NULL;
-            prev_level = 1;
+
+            if(is_empty_tree(tree)) 
+                tree = node;
+
+            stack[level] = node;
+
+            for(size_t l = (size_t)level + 1; l < stack_cap; ++l) 
+                stack[l] = NULL;
+
             continue;
         }
 
-        Tree parent = stack[level - 1];
-        if(is_empty_tree(parent)){
-            int seek = level - 1;
-            while(seek > 0 && is_empty_tree(stack[seek])) seek--;
-            if(is_empty_tree(stack[seek])){
-                fprintf(stderr, "warning (parse_file) : missing ancestor for level %d; using root as parent\n", level);
-                parent = stack[0];
-                level = 1;
-            } else {
-                fprintf(stderr, "warning (parse_file) : missing ancestor at level %d; using level %d instead\n",
-                        level - 1, seek);
-                parent = stack[seek];
-                level = seek + 1;
-            }
+        if(t->type == T_EOF){
+            break;
         }
-
-        Tree node = NULL;
-        if(level > prev_level){
-            node = attach_child(stack[prev_level], clean_line);
-            if(node == NULL) continue;
-            stack[level] = node;
-        } else if(level == prev_level){
-            node = attach_child(parent, clean_line);
-            if(node == NULL) continue;
-            stack[level] = node;
-        } else { 
-            node = attach_child(parent, clean_line);
-            if(node == NULL) continue;
-            stack[level] = node;
-            for(int l = level + 1; l <= prev_level; ++l) stack[l] = NULL;
-        }
-
-        prev_level = level;
     }
 
+    for(size_t i=0;i<ntok;++i) token_free(&toks[i]);
+    free(toks);
     free(stack);
-    fclose(fp);
+
     return tree;
+
 }
